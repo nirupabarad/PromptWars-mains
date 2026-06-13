@@ -3,23 +3,26 @@
  *
  * POST /api/analyze
  *
- * Processes user journal text server-side to determine sentiment,
- * detect crisis indicators, and identify patterns.
+ * Processes user journal text server-side:
+ * 1. Validates input (Zod schema)
+ * 2. Runs local sentiment analysis (fast, always available)
+ * 3. Detects crisis indicators
+ * 4. Returns structured analysis
  *
  * SECURITY:
  * - Input validated with Zod schema before processing
  * - Rate limited to prevent abuse (60 req/min)
  * - No user data logged or stored
- * - Runs server-side only (logic not exposed to client bundle)
+ * - Runs server-side only
  * - Error messages never contain user input
  */
 
 import { NextResponse } from "next/server";
-import { analyzeEntryWithGemini } from "@/src/engine/gemini";
+import { analyzeSentiment } from "@/src/engine/sentiment";
+import { assessCrisis } from "@/src/engine/crisisDetector";
 import { validateAnalyzeRequest } from "@/src/utils/validators";
 import { RATE_LIMIT_MAX } from "@/src/utils/constants";
-import type { AnalyzeResponse, MoodEntry } from "@/src/types";
-import { getCurrentTimePeriod, generateId } from "@/src/utils/helpers";
+import type { AnalyzeResponse } from "@/src/types";
 
 /**
  * SECURITY: Simple in-memory rate limiter.
@@ -59,8 +62,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     const body = await request.json();
     const validated = validateAnalyzeRequest(body);
 
-    // Process sentiment analysis using Gemini API
-    const response = await analyzeEntryWithGemini(validated.text);
+    // Run local sentiment analysis (fast, always available)
+    const sentiment = analyzeSentiment(validated.text);
+
+    // Assess crisis severity
+    const crisis = assessCrisis(validated.text, sentiment.score);
+
+    const response: AnalyzeResponse = {
+      sentiment,
+      crisis,
+      patterns: [],
+    };
 
     return NextResponse.json(response);
   } catch (error) {
