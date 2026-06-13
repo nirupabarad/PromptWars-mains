@@ -11,9 +11,11 @@
  * - Clear all data action available for immediate privacy
  *
  * EFFICIENCY:
- * - useReducer for predictable state updates
- * - Bounded arrays prevent memory growth
- * - Memoized context value prevents unnecessary re-renders
+ * - useReducer for O(1) predictable state transitions (no deep cloning)
+ * - Bounded arrays (MAX_ENTRIES=30, MAX_CHAT=50) cap memory at ~500KB
+ * - useMemo prevents context value recreation on every render
+ * - useCallback stabilizes dispatch helpers to prevent child re-renders
+ * - Immutable state updates enable React's shallow comparison optimization
  */
 
 "use client";

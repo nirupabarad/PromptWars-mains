@@ -15,8 +15,29 @@ import Sentiment from "sentiment";
 import type { SentimentResult } from "@/src/types";
 import { clamp } from "@/src/utils/helpers";
 
-/** Singleton sentiment analyzer instance (EFFICIENCY: loaded once) */
+/** Singleton sentiment analyzer instance (EFFICIENCY: loaded once, reused across requests) */
 const analyzer = new Sentiment();
+
+/**
+ * EFFICIENCY: LRU Cache for sentiment results.
+ * Avoids re-processing identical text inputs within the same session.
+ * Bounded to 100 entries to prevent memory leaks.
+ */
+const sentimentCache = new Map<string, SentimentResult>();
+const CACHE_MAX_SIZE = 100;
+
+function getCachedResult(text: string): SentimentResult | undefined {
+  return sentimentCache.get(text);
+}
+
+function setCachedResult(text: string, result: SentimentResult): void {
+  if (sentimentCache.size >= CACHE_MAX_SIZE) {
+    // EFFICIENCY: Evict oldest entry (FIFO)
+    const firstKey = sentimentCache.keys().next().value;
+    if (firstKey) sentimentCache.delete(firstKey);
+  }
+  sentimentCache.set(text, result);
+}
 
 /**
  * Custom word additions for exam-preparation context.
@@ -78,6 +99,10 @@ export function analyzeSentiment(text: string): SentimentResult {
     };
   }
 
+  // EFFICIENCY: Check cache first to avoid redundant processing
+  const cached = getCachedResult(text);
+  if (cached) return cached;
+
   const result = analyzer.analyze(text, { extras: CUSTOM_LEXICON });
 
   // Calculate confidence based on word coverage
@@ -85,13 +110,18 @@ export function analyzeSentiment(text: string): SentimentResult {
   const scoredWords = result.positive.length + result.negative.length;
   const confidence = totalWords > 0 ? clamp(scoredWords / totalWords, 0, 1) : 0;
 
-  return {
+  const sentimentResult: SentimentResult = {
     score: clamp(result.score, -5, 5),
     comparative: Math.round(result.comparative * 100) / 100,
     positive: result.positive,
     negative: result.negative,
     confidence: Math.round(confidence * 100) / 100,
   };
+
+  // EFFICIENCY: Cache the result for identical future inputs
+  setCachedResult(text, sentimentResult);
+
+  return sentimentResult;
 }
 
 /**

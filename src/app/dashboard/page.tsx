@@ -15,8 +15,8 @@
 
 "use client";
 
-import React, { useState, useCallback } from "react";
-import { MoodChart } from "@/src/components/features/MoodChart";
+import React, { useState, useCallback, lazy, Suspense } from "react";
+import dynamic from "next/dynamic";
 import { PatternInsight } from "@/src/components/features/PatternInsight";
 import { InsightCard } from "@/src/components/ui/InsightCard";
 import { useWellness } from "@/src/context/WellnessContext";
@@ -24,6 +24,25 @@ import { detectPatterns } from "@/src/engine/patternDetector";
 import { MOOD_VALUES, MOOD_EMOJIS } from "@/src/utils/constants";
 import { calculateStreak, generateId } from "@/src/utils/helpers";
 import type { WeeklyAnalysisReport } from "@/src/types";
+
+/**
+ * EFFICIENCY: Dynamically import MoodChart (Recharts is ~200KB).
+ * Only loaded when dashboard is visited, not on initial page load.
+ */
+const MoodChart = dynamic(
+  () =>
+    import("@/src/components/features/MoodChart").then((mod) => ({
+      default: mod.MoodChart,
+    })),
+  {
+    loading: () => (
+      <div className="h-48 flex items-center justify-center bg-surface rounded-xl">
+        <p className="text-text-muted text-sm">Loading chart...</p>
+      </div>
+    ),
+    ssr: false, // EFFICIENCY: No server-side render for chart (client-only interaction)
+  },
+);
 
 export default function DashboardPage(): React.JSX.Element {
   const { state, setWeeklyReport } = useWellness();
