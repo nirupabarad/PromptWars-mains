@@ -85,6 +85,18 @@ export interface ChatMessage {
   readonly crisisAlert?: boolean;
 }
 
+/** AI-generated weekly pattern analysis report */
+export interface WeeklyAnalysisReport {
+  readonly id: string;
+  readonly generatedAt: number;
+  readonly entryCount: number;
+  readonly summary: string;
+  readonly hiddenTriggers: readonly string[];
+  readonly emotionalPatterns: readonly string[];
+  readonly recommendations: readonly string[];
+  readonly moodTrajectory: "improving" | "stable" | "declining";
+}
+
 /** Global wellness state (in-memory only) */
 export interface WellnessState {
   readonly entries: readonly MoodEntry[];
@@ -93,6 +105,8 @@ export interface WellnessState {
   readonly currentStreak: number;
   readonly highContrastMode: boolean;
   readonly reducedMotion: boolean;
+  readonly weeklyReport: WeeklyAnalysisReport | null;
+  readonly lastAnalysisEntryCount: number;
 }
 
 /** Actions for the wellness state reducer */
@@ -101,6 +115,7 @@ export type WellnessAction =
   | { type: "ADD_CHAT_MESSAGE"; payload: ChatMessage }
   | { type: "SET_EXAM_TYPE"; payload: ExamType }
   | { type: "UPDATE_STREAK"; payload: number }
+  | { type: "SET_WEEKLY_REPORT"; payload: WeeklyAnalysisReport }
   | { type: "TOGGLE_HIGH_CONTRAST" }
   | { type: "TOGGLE_REDUCED_MOTION" }
   | { type: "CLEAR_ALL_DATA" };

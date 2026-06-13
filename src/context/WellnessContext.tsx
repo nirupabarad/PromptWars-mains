@@ -2,7 +2,7 @@
  * Wellness Context Provider
  *
  * Global state management using React Context + useReducer.
- * All data is stored in-memory only (React state).
+ * Stores journal entries, chat history, and AI-generated pattern reports.
  *
  * SECURITY:
  * - No data persisted to localStorage, cookies, or external storage
@@ -30,6 +30,7 @@ import type {
   WellnessAction,
   MoodEntry,
   ChatMessage,
+  WeeklyAnalysisReport,
 } from "@/src/types";
 import { MAX_ENTRIES, MAX_CHAT_MESSAGES } from "@/src/utils/constants";
 
@@ -41,15 +42,12 @@ const initialState: WellnessState = {
   currentStreak: 0,
   highContrastMode: false,
   reducedMotion: false,
+  weeklyReport: null,
+  lastAnalysisEntryCount: 0,
 };
 
 /**
  * State reducer for wellness actions.
- * All mutations are immutable (new array/object references).
- *
- * @param state - Current state
- * @param action - Action to apply
- * @returns New state
  */
 function wellnessReducer(
   state: WellnessState,
@@ -57,13 +55,11 @@ function wellnessReducer(
 ): WellnessState {
   switch (action.type) {
     case "ADD_ENTRY": {
-      // EFFICIENCY: Bounded array - remove oldest if at capacity
       const entries = [action.payload, ...state.entries].slice(0, MAX_ENTRIES);
       return { ...state, entries };
     }
 
     case "ADD_CHAT_MESSAGE": {
-      // EFFICIENCY: Bounded chat history
       const chatMessages = [...state.chatMessages, action.payload].slice(
         -MAX_CHAT_MESSAGES,
       );
@@ -76,6 +72,13 @@ function wellnessReducer(
     case "UPDATE_STREAK":
       return { ...state, currentStreak: action.payload };
 
+    case "SET_WEEKLY_REPORT":
+      return {
+        ...state,
+        weeklyReport: action.payload,
+        lastAnalysisEntryCount: state.entries.length,
+      };
+
     case "TOGGLE_HIGH_CONTRAST":
       return { ...state, highContrastMode: !state.highContrastMode };
 
@@ -83,7 +86,6 @@ function wellnessReducer(
       return { ...state, reducedMotion: !state.reducedMotion };
 
     case "CLEAR_ALL_DATA":
-      // SECURITY: Complete data wipe - returns to initial state
       return { ...initialState };
 
     default:
@@ -97,6 +99,7 @@ interface WellnessContextType {
   dispatch: React.Dispatch<WellnessAction>;
   addEntry: (entry: MoodEntry) => void;
   addChatMessage: (message: ChatMessage) => void;
+  setWeeklyReport: (report: WeeklyAnalysisReport) => void;
   clearAllData: () => void;
 }
 
@@ -104,23 +107,15 @@ const WellnessContext = createContext<WellnessContextType | undefined>(
   undefined,
 );
 
-/** Provider component props */
 interface WellnessProviderProps {
   children: ReactNode;
 }
 
-/**
- * WellnessProvider wraps the application to provide global state.
- *
- * @param props - Provider props with children
- * @returns Context provider component
- */
 export function WellnessProvider({
   children,
 }: WellnessProviderProps): React.JSX.Element {
   const [state, dispatch] = useReducer(wellnessReducer, initialState);
 
-  // Memoized helper functions to prevent unnecessary re-renders
   const contextValue = useMemo<WellnessContextType>(
     () => ({
       state,
@@ -129,6 +124,8 @@ export function WellnessProvider({
         dispatch({ type: "ADD_ENTRY", payload: entry }),
       addChatMessage: (message: ChatMessage) =>
         dispatch({ type: "ADD_CHAT_MESSAGE", payload: message }),
+      setWeeklyReport: (report: WeeklyAnalysisReport) =>
+        dispatch({ type: "SET_WEEKLY_REPORT", payload: report }),
       clearAllData: () => dispatch({ type: "CLEAR_ALL_DATA" }),
     }),
     [state, dispatch],
@@ -141,12 +138,6 @@ export function WellnessProvider({
   );
 }
 
-/**
- * Custom hook to access wellness context.
- * Throws if used outside provider (fail-fast for development).
- *
- * @returns WellnessContextType with state and actions
- */
 export function useWellness(): WellnessContextType {
   const context = useContext(WellnessContext);
   if (context === undefined) {

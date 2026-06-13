@@ -129,6 +129,38 @@ export default function HomePage(): React.JSX.Element {
 
         setFeedback("Thank you for sharing. Your entry has been logged. 💜");
         setSelectedMood(null);
+
+        // AUTO-TRIGGER PATTERN ANALYSIS after 3+ entries
+        const newEntryCount = state.entries.length + 1;
+        if (
+          newEntryCount >= 3 &&
+          newEntryCount > state.lastAnalysisEntryCount + 2
+        ) {
+          // Background analysis - don't block UI
+          fetch("/api/patterns", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              entries: [entry, ...state.entries].slice(0, 30).map((e) => ({
+                mood: e.mood,
+                journalText: e.journalText,
+                timestamp: e.timestamp,
+                sentimentScore: e.sentimentScore,
+                timePeriod: e.timePeriod,
+              })),
+              examType: state.examType,
+            }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.report) {
+                dispatch({ type: "SET_WEEKLY_REPORT", payload: data.report });
+              }
+            })
+            .catch(() => {
+              /* Silent fail - patterns are a bonus */
+            });
+        }
       } catch {
         setFeedback("Unable to process your entry. Please try again.");
       } finally {

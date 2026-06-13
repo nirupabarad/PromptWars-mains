@@ -1,91 +1,149 @@
-# MindMate - Mental Wellness Tracker for Students
+# MindMate — Mental Wellness Tracker for Students
 
-A smart, dynamic AI-powered wellness companion that helps students preparing for high-stakes exams (NEET, JEE, UPSC) manage stress through mood tracking, sentiment analysis, and personalized coping strategies.
+An AI-powered mental wellness tracker that helps students preparing for competitive exams (NEET, JEE, UPSC) manage stress by analyzing their daily journal entries, uncovering hidden stress triggers, identifying emotional patterns, and providing hyper-personalized coping strategies based on their history.
+
+---
 
 ## Chosen Vertical
 
-**Health & Wellness AI Assistant**
+**Health & Wellness — Smart Mental Wellness AI Assistant**
 
-MindMate addresses the critical mental health challenges faced by competitive exam aspirants in India, where student stress and burnout are widespread issues.
+MindMate is not a generic chatbot. It is a **data-driven wellness tracker** that performs the Input → Analyze → Contextualize → Respond loop:
+
+1. **Ingestion**: Students log daily moods and open-ended journal entries
+2. **Analysis**: AI analyzes the full journal history to uncover hidden stress triggers and emotional patterns
+3. **Contextualization**: The AI remembers past entries and references specific triggers when responding
+4. **Personalization**: Coping strategies are selected based on mood, exam type, time of day, and historical patterns
+
+---
 
 ## Approach and Logic
 
-### Architecture Overview
+### Architecture: The Pattern Analyzer Agent
 
-MindMate uses a modular, layered architecture with clear separation of concerns:
+The core intelligence of MindMate is the **Pattern Analyzer Agent** — a Gemini AI-powered system that processes the student's complete journal history to surface insights they cannot see themselves.
 
 ```
-User Interface (React + Tailwind)
-        |
-        v
-API Routes (Server-side, secure)
-        |
-        v
-Engine Layer (Sentiment, Patterns, Crisis, Recommendations)
-        |
-        v
-Context Layer (In-memory state, no persistence)
+┌─────────────────────────────────────────────────────┐
+│                    USER INTERFACE                     │
+│  Mood Selector → Journal Entry → Quick Thoughts      │
+└──────────────────────┬──────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────┐
+│              API ROUTES (Server-Side)                 │
+│                                                      │
+│  /api/analyze   → Sentiment + Crisis Detection       │
+│  /api/patterns  → AI Pattern Analyzer Agent          │
+│  /api/recommend → Context-Aware Recommendations      │
+│  /api/chat      → Memory-Enhanced Companion          │
+└──────────────────────┬──────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────┐
+│              GEMINI AI + LOCAL ENGINE                 │
+│                                                      │
+│  1. Local Sentiment (AFINN) — fast, always works     │
+│  2. Pattern Analyzer (Gemini) — deep journal review  │
+│  3. Chat with Memory — references past patterns      │
+│  4. Crisis Detection — safety net with helplines     │
+└─────────────────────────────────────────────────────┘
 ```
 
-### Core Logic Flow
+### Key Design Decisions
 
-1. **Input Validation**: All user input is sanitized using Zod schemas and DOMPurify to prevent XSS and injection attacks.
+1. **Structured Journaling**: Each entry stores timestamp, mood level, text, sentiment score, and time period — enabling time-series pattern analysis.
 
-2. **Sentiment Analysis**: Uses the AFINN-based `sentiment` package with custom lexicon additions for exam-related terminology. Processes text server-side in API routes.
+2. **Hidden Trigger Detection**: The AI prompt explicitly asks Gemini to "identify triggers the student may not consciously realize" — e.g., "Sunday evenings before Monday mock tests cause anticipatory anxiety."
 
-3. **Pattern Detection**: Analyzes mood history to identify:
-   - Time-based patterns (e.g., "you feel more stressed in evenings")
-   - Stress triggers (recurring words like "exam", "pressure")
-   - Mood trends (improving or declining)
-   - Streaks (consecutive positive/negative days)
+3. **Long-Term Memory**: When the student chats with MindMate, the AI receives their full journal history AND the weekly analysis report. This enables responses like "I remember you felt the same way before your Physics test last time."
 
-4. **Crisis Detection**: Scans for crisis-level language and extremely negative sentiment. When detected, immediately shows emergency helpline resources (KIRAN, iCall, Vandrevala Foundation).
+4. **Auto-Analysis Loop**: After every 3+ entries, the Pattern Analyzer Agent runs automatically in the background, updating the weekly report with new insights.
 
-5. **Context-Aware Recommendations**: Uses the Strategy Pattern to select coping techniques based on:
-   - Current mood severity
-   - Exam type (NEET/JEE/UPSC-specific tips)
-   - Time of day (morning study vs evening wind-down)
-   - Recent mood history (avoids repeating same strategies)
+5. **Graceful Degradation**: If Gemini is unavailable, local sentiment analysis + rule-based recommendations still work.
 
-### Design Patterns Used
-
-- **Strategy Pattern**: Recommendation engine selects different strategies based on context
-- **Context Pattern**: React Context + useReducer for predictable state management
-- **Defensive Programming**: Input validation at every boundary
-- **Separation of Concerns**: Engine/UI/API layers are independent
+---
 
 ## How the Solution Works
 
-### Pages
+### 1. Home Page — Daily Journaling
+- Select mood (5 levels with emoji)
+- Choose from predefined quick thoughts OR write freely
+- Entry is analyzed for sentiment and crisis indicators
+- Auto-triggers pattern analysis after 3+ entries
 
-1. **Home** (`/`): Quick mood check-in with emoji selector and journal input. Shows mood streak, entry count, and average mood.
+### 2. Companion Chat — AI with Memory
+- Gemini-powered conversational interface
+- **References past journal entries** in responses
+- **Aware of detected patterns and triggers**
+- Provides contextual breathing exercises when stress detected
+- Quick prompts adapt based on whether patterns are known
 
-2. **Companion Chat** (`/chat`): Conversational interface with MindMate. Provides empathetic responses, coping strategies, and interactive breathing exercises.
+### 3. Dashboard — Pattern Analysis Report
+- **AI Pattern Analyzer Agent** processes full journal history
+- Surfaces **hidden stress triggers** the student may not see
+- Shows **emotional patterns** with specific evidence from entries
+- Provides **personalized recommendations** linked to identified triggers
+- Mood timeline chart, streak tracking, mood distribution
 
-3. **Dashboard** (`/dashboard`): Mood timeline visualization, pattern insights, mood distribution, and streak tracking.
+### 4. Toolbox — Coping Strategies
+- 10 evidence-based coping techniques
+- Categories: Breathing, Mindfulness, Physical, Cognitive, Social, Study
+- Each technique has exam-specific context (NEET/JEE/UPSC)
+- Interactive breathing exercise with animated guide
 
-4. **Toolbox** (`/toolbox`): Browse all 10 coping strategies organized by category (breathing, mindfulness, physical, cognitive, social, study techniques).
+### 5. Crisis Detection
+- Scans every entry for crisis-level language
+- Immediately shows Indian helpline resources (KIRAN, iCall, Vandrevala Foundation)
+- Warm, non-judgmental messaging
 
-### Key Features
+---
 
-- Emoji-based mood selection (5 levels)
-- Free-text journaling with sentiment analysis
-- Interactive box breathing exercise with animated guide
-- Mood trend chart (Recharts)
-- Crisis detection with emergency helpline display
-- Exam-type-specific recommendations
-- Dark calm theme designed for stress reduction
-- Full keyboard navigation and screen reader support
+## Technical Highlights
 
-## Setup and Installation
+### Security
+- In-memory only (no database, no localStorage)
+- Server-side AI processing via API routes
+- Input sanitization (Zod + DOMPurify)
+- CSP headers, rate limiting, XSS prevention
+- API key in .env.local (never committed)
+
+### Code Quality
+- TypeScript strict mode
+- Modular architecture: /engine, /components, /utils, /types
+- Design patterns: Strategy, Context, Reducer
+- Security comments on every file
+- JSDoc documentation
+
+### Efficiency
+- Local sentiment analysis (<5ms per entry)
+- Gemini API for deep analysis (only when needed)
+- Bounded history (max 30 entries)
+- Next.js code splitting
+
+### Testing
+- 90 unit + integration tests passing
+- Tests cover: sentiment, crisis, patterns, recommendations, validators
+- Edge cases: XSS, empty input, long text, performance
+
+### Accessibility
+- Skip to content link, semantic landmarks
+- ARIA labels, aria-live regions
+- Keyboard navigation, visible focus
+- WCAG 2.1 AA color contrast
+- prefers-reduced-motion respected
+
+---
+
+## Setup and Run
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd mindmate
-
 # Install dependencies
 npm install
+
+# Add your Gemini API key
+cp .env.example .env.local
+# Edit .env.local and add: GEMINI_API_KEY=your_key
 
 # Start development server
 npm run dev
@@ -93,87 +151,34 @@ npm run dev
 # Run tests
 npm test
 
-# Run tests with coverage
-npm run test:coverage
-
 # Build for production
 npm run build
 ```
 
-## Technical Highlights
-
-### Security (implemented throughout)
-- In-memory only processing (no database, no localStorage, no cookies)
-- Server-side sentiment analysis via API routes (logic not in client bundle)
-- Input sanitization with Zod + DOMPurify at every entry point
-- Content Security Policy headers in next.config.js
-- Rate limiting on API routes (60 req/min)
-- XSS prevention (no dangerouslySetInnerHTML with user content)
-- No external API calls (all NLP processing is local)
-- Security decision comments on every file
-
-### Efficiency
-- Lightweight `sentiment` package (~15KB) instead of TensorFlow/PyTorch
-- Pre-computed strategy lookup tables (no runtime computation for recommendations)
-- Bounded session history (max 30 entries prevents memory growth)
-- Next.js automatic code splitting per page
-- Memoized React components prevent unnecessary re-renders
-- Total repo size under 2MB
-
-### Testing
-- Unit tests for all engine modules (sentiment, patterns, crisis, recommendations)
-- Input validation tests (XSS, bounds, schema)
-- Integration tests (full pipeline end-to-end)
-- Performance tests (30 entries processed in under 500ms)
-- Edge case coverage (empty input, special characters, long text)
-
-### Accessibility
-- Skip to main content link
-- Semantic HTML landmarks (header, nav, main, footer)
-- ARIA labels on all interactive elements
-- aria-live regions for dynamic content updates
-- Visible focus indicators for keyboard navigation
-- prefers-reduced-motion respected
-- WCAG 2.1 AA color contrast compliance
-- Not reliant on color alone (emoji + text + position)
-- High contrast mode toggle
+---
 
 ## Assumptions Made
 
-1. Users are students preparing for Indian competitive exams (NEET, JEE, UPSC)
-2. No persistent data storage is needed (session-based for privacy)
-3. Sentiment analysis via word-level scoring is sufficient (no deep learning needed)
-4. Emergency resources are India-based helplines
-5. The application runs in a modern browser with JavaScript enabled
-6. Users may be in distress and UI must be non-judgmental and warm
-7. All processing must happen client/server-side with no external API dependencies
+1. Target users are Indian students preparing for NEET, JEE, or UPSC
+2. Privacy is paramount — no persistent data storage
+3. The app should work even without Gemini (graceful degradation)
+4. Students may be in genuine distress — crisis detection is a safety requirement
+5. The AI must remember and reference past entries (not be stateless)
+6. Pattern analysis improves with more entries (minimum 3 required)
+7. Emergency resources are India-based helplines
+
+---
 
 ## Tech Stack
 
-| Component | Technology | Rationale |
-|---|---|---|
-| Framework | Next.js 14 (App Router) | SSR, API routes, code splitting |
-| Language | TypeScript (strict) | Type safety, code quality |
-| Styling | Tailwind CSS | Rapid theming, accessibility |
-| Sentiment | `sentiment` npm package | Lightweight, fast, no ML overhead |
-| Charts | Recharts | Accessible, React-native |
-| Validation | Zod | Type-safe schemas |
-| State | React Context + useReducer | In-memory, predictable |
-| Testing | Jest + React Testing Library | Industry standard |
-
-## Project Structure
-
-```
-src/
-├── app/          # Next.js pages and API routes
-├── components/   # Reusable UI components (ui/, features/, layout/)
-├── engine/       # Core logic (sentiment, patterns, crisis, recommendations)
-├── context/      # Global state management
-├── utils/        # Validators, constants, helpers, exceptions
-├── types/        # TypeScript interfaces
-└── styles/       # Global CSS with Tailwind
-tests/
-├── engine/       # Engine unit tests
-├── utils/        # Validator tests
-└── integration/  # End-to-end pipeline tests
-```
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 14 (App Router) |
+| Language | TypeScript (strict) |
+| AI | Google Gemini 2.0 Flash |
+| Sentiment | `sentiment` npm (AFINN-based) |
+| UI | Tailwind CSS (dark calm theme) |
+| Charts | Recharts |
+| Validation | Zod |
+| State | React Context + useReducer |
+| Testing | Jest + React Testing Library |

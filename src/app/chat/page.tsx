@@ -1,12 +1,12 @@
 /**
- * Chat Page - Wellness Companion
+ * Chat Page - AI Wellness Companion with Long-Term Memory
  *
- * Full conversational interface with MindMate companion.
- * Provides contextual responses, coping recommendations,
- * and interactive exercises.
+ * Conversational interface powered by Gemini AI.
+ * KEY DIFFERENTIATOR: The AI references past journal entries and
+ * detected patterns to provide hyper-personalized support.
  *
- * SECURITY: Messages processed via API routes.
- * ACCESSIBILITY: aria-live region for new messages, keyboard submit.
+ * SECURITY: All processing via server-side API routes.
+ * ACCESSIBILITY: aria-live for messages, keyboard navigation.
  */
 
 "use client";
@@ -16,45 +16,44 @@ import { ChatBubble } from "@/src/components/ui/ChatBubble";
 import { CrisisAlert } from "@/src/components/features/CrisisAlert";
 import { BreathingExercise } from "@/src/components/features/BreathingExercise";
 import { useWellness } from "@/src/context/WellnessContext";
-import { generateId, getCurrentTimePeriod } from "@/src/utils/helpers";
+import { generateId } from "@/src/utils/helpers";
 import { sanitizeText } from "@/src/utils/validators";
 import { MAX_INPUT_LENGTH } from "@/src/utils/constants";
-import type {
-  ChatMessage,
-  AnalyzeResponse,
-  RecommendResponse,
-} from "@/src/types";
+import type { ChatMessage } from "@/src/types";
 
-/**
- * ChatPage renders the MindMate companion chat interface.
- *
- * @returns Chat page component
- */
 export default function ChatPage(): React.JSX.Element {
   const { state, addChatMessage } = useWellness();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showBreathing, setShowBreathing] = useState(false);
   const [crisisVisible, setCrisisVisible] = useState(false);
-  const [crisisMessage, setCrisisMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [state.chatMessages]);
 
-  // Show welcome message if no messages
+  // Welcome message with context awareness
   useEffect(() => {
     if (state.chatMessages.length === 0) {
-      const welcomeMessage: ChatMessage = {
+      let welcomeText =
+        "Hi there! I am MindMate, your personal wellness companion. 💜\n\n";
+
+      if (state.entries.length > 0 && state.weeklyReport) {
+        welcomeText += `I have been tracking your journey — you have ${state.entries.length} check-ins so far. Based on your patterns, I know what has been tough and what helps you. Ask me anything or just vent — I am here.\n\nI remember your recent experiences and can give you personalized support.`;
+      } else if (state.entries.length > 0) {
+        welcomeText += `I can see you have logged ${state.entries.length} entries. Tell me how you are feeling, and I will draw from what I know about your patterns to help.`;
+      } else {
+        welcomeText +=
+          "I am here to listen, help you track your mental wellness, and give you personalized coping strategies for your exam preparation. Start by telling me how you are feeling today.";
+      }
+
+      addChatMessage({
         id: generateId(),
         role: "assistant",
-        content:
-          "Hi! I am MindMate, your wellness companion. Tell me how you are feeling, what is on your mind, or if you would like to try a relaxation technique. I am here to listen.",
+        content: welcomeText,
         timestamp: Date.now(),
-      };
-      addChatMessage(welcomeMessage);
+      });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -62,15 +61,13 @@ export default function ChatPage(): React.JSX.Element {
     const trimmed = input.trim();
     if (!trimmed || isLoading) return;
 
-    // SECURITY: Sanitize input before processing
     const sanitized = sanitizeText(trimmed);
-    if (sanitized.length < 3) return;
+    if (sanitized.length < 2) return;
 
     setInput("");
     setIsLoading(true);
     setCrisisVisible(false);
 
-    // Add user message
     const userMessage: ChatMessage = {
       id: generateId(),
       role: "user",
@@ -80,73 +77,67 @@ export default function ChatPage(): React.JSX.Element {
     addChatMessage(userMessage);
 
     try {
-      // Analyze sentiment
-      const analyzeRes = await fetch("/api/analyze", {
+      // Send to chat API with FULL CONTEXT for personalization
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: sanitized,
-          mood: state.entries[0]?.mood || "okay",
-        }),
-      });
-
-      if (!analyzeRes.ok) throw new Error("Analysis failed");
-      const analyzeData: AnalyzeResponse = await analyzeRes.json();
-
-      // Check crisis
-      if (analyzeData.crisis.showResources) {
-        setCrisisVisible(true);
-        setCrisisMessage(analyzeData.crisis.recommendation);
-      }
-
-      // Get recommendation
-      const recommendRes = await fetch("/api/recommend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sentimentScore: analyzeData.sentiment.score,
+          message: sanitized,
           mood: state.entries[0]?.mood || "okay",
           examType: state.examType,
-          timePeriod: getCurrentTimePeriod(),
-          recentMoods: state.entries.slice(0, 5).map((e) => e.mood),
+          recentMoods: state.entries.slice(0, 10).map((e) => e.mood),
+          // LONG-TERM MEMORY: Pass recent entries for context
+          recentEntries: state.entries.slice(0, 7).map((e) => ({
+            mood: e.mood,
+            journalText: e.journalText,
+            timestamp: e.timestamp,
+            sentimentScore: e.sentimentScore,
+            timePeriod: e.timePeriod,
+          })),
+          // PATTERN AWARENESS: Pass weekly report so AI references triggers
+          weeklyReport: state.weeklyReport
+            ? {
+                summary: state.weeklyReport.summary,
+                hiddenTriggers: state.weeklyReport.hiddenTriggers,
+                emotionalPatterns: state.weeklyReport.emotionalPatterns,
+                recommendations: state.weeklyReport.recommendations,
+                moodTrajectory: state.weeklyReport.moodTrajectory,
+              }
+            : null,
         }),
       });
 
-      if (!recommendRes.ok) throw new Error("Recommendation failed");
-      const recommendData: RecommendResponse = await recommendRes.json();
+      if (!response.ok) throw new Error("Chat failed");
+      const data = await response.json();
 
-      // Build assistant response
-      let responseContent = recommendData.empathyMessage;
-      responseContent += `\n\n${recommendData.recommendation.title}: ${recommendData.recommendation.description}`;
-      responseContent += `\n\nSteps:\n${recommendData.recommendation.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}`;
-      responseContent += `\n\n${recommendData.encouragement}`;
+      if (data.crisis) setCrisisVisible(true);
 
-      // Check if breathing exercise recommended
-      if (recommendData.recommendation.category === "breathing") {
+      const lowerResponse = (data.response || "").toLowerCase();
+      if (
+        lowerResponse.includes("breathing") ||
+        lowerResponse.includes("breathe")
+      ) {
         setShowBreathing(true);
       }
 
-      const assistantMessage: ChatMessage = {
+      addChatMessage({
         id: generateId(),
         role: "assistant",
-        content: responseContent,
+        content: data.response || "I hear you. Let me think about how to help.",
         timestamp: Date.now(),
-        crisisAlert: analyzeData.crisis.showResources,
-      };
-      addChatMessage(assistantMessage);
+        crisisAlert: data.crisis,
+      });
     } catch {
-      const errorMessage: ChatMessage = {
+      addChatMessage({
         id: generateId(),
         role: "assistant",
-        content:
-          "I am sorry, something went wrong on my end. Could you try sharing that again?",
+        content: "I could not process that right now. Could you try again?",
         timestamp: Date.now(),
-      };
-      addChatMessage(errorMessage);
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [input, isLoading, state.entries, state.examType, addChatMessage]);
+  }, [input, isLoading, state, addChatMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -155,11 +146,36 @@ export default function ChatPage(): React.JSX.Element {
     }
   };
 
+  const quickPrompts = state.weeklyReport
+    ? [
+        "What patterns have you noticed?",
+        "What are my stress triggers?",
+        "Help me with my biggest challenge",
+        "I need a coping strategy",
+      ]
+    : [
+        "I am feeling stressed about exams",
+        "Help me relax right now",
+        "I need study tips",
+        "Tell me something motivating",
+      ];
+
   return (
     <div className="flex flex-col h-[calc(100vh-200px)] animate-fade-in">
       <h2 className="sr-only">MindMate Companion Chat</h2>
 
-      {/* Messages area */}
+      {/* Pattern awareness badge */}
+      {state.weeklyReport && (
+        <div className="mb-3 px-3 py-2 bg-secondary/10 border border-secondary/20 rounded-lg flex items-center gap-2">
+          <span aria-hidden="true">🧠</span>
+          <p className="text-secondary text-xs">
+            AI is aware of your patterns and{" "}
+            {state.weeklyReport.hiddenTriggers.length} identified triggers
+          </p>
+        </div>
+      )}
+
+      {/* Messages */}
       <div
         className="flex-1 overflow-y-auto space-y-4 pb-4 pr-2"
         role="log"
@@ -170,44 +186,69 @@ export default function ChatPage(): React.JSX.Element {
           <ChatBubble key={message.id} message={message} />
         ))}
 
-        {/* Loading indicator */}
         {isLoading && (
-          <div className="flex justify-start" aria-label="MindMate is thinking">
-            <div className="bg-surface-light rounded-2xl px-4 py-3 rounded-bl-md">
-              <div className="flex gap-1">
+          <div className="flex justify-start">
+            <div className="bg-surface-light rounded-2xl px-4 py-3 rounded-bl-md border border-primary/20">
+              <p className="text-primary text-xs font-medium mb-1">
+                🧠 MindMate
+              </p>
+              <div className="flex gap-1.5 items-center">
                 <span className="w-2 h-2 bg-primary rounded-full animate-pulse-gentle" />
                 <span className="w-2 h-2 bg-primary rounded-full animate-pulse-gentle [animation-delay:0.2s]" />
                 <span className="w-2 h-2 bg-primary rounded-full animate-pulse-gentle [animation-delay:0.4s]" />
+                <span className="text-text-muted text-xs ml-2">
+                  Thinking...
+                </span>
               </div>
             </div>
           </div>
         )}
-
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Crisis alert */}
-      <CrisisAlert visible={crisisVisible} message={crisisMessage} />
+      <CrisisAlert visible={crisisVisible} message="" />
 
-      {/* Breathing exercise (if suggested) */}
       {showBreathing && (
-        <div className="my-4">
+        <div className="my-3">
           <BreathingExercise reducedMotion={state.reducedMotion} />
+          <button
+            type="button"
+            onClick={() => setShowBreathing(false)}
+            className="text-text-muted text-xs mt-2 hover:text-text-primary"
+          >
+            Hide exercise
+          </button>
         </div>
       )}
 
-      {/* Input area */}
+      {/* Quick prompts */}
+      {state.chatMessages.length <= 3 && (
+        <div className="flex flex-wrap gap-2 pb-3">
+          {quickPrompts.map((prompt) => (
+            <button
+              key={prompt}
+              type="button"
+              onClick={() => setInput(prompt)}
+              className="px-3 py-1.5 rounded-full text-xs bg-surface-light border border-primary/20 text-text-muted hover:text-primary hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Input */}
       <div className="flex gap-2 pt-3 border-t border-primary/10">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type your thoughts..."
+          placeholder="Tell me how you are feeling... (Enter to send)"
           maxLength={MAX_INPUT_LENGTH}
           rows={2}
           disabled={isLoading}
           autoComplete="off"
-          aria-label="Type your message to MindMate"
+          aria-label="Type your message"
           className="flex-1 px-4 py-2.5 rounded-xl bg-surface border border-primary/20 text-text-primary text-sm placeholder:text-text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none disabled:opacity-50"
         />
         <button
@@ -215,7 +256,7 @@ export default function ChatPage(): React.JSX.Element {
           onClick={handleSend}
           disabled={isLoading || !input.trim()}
           aria-label="Send message"
-          className="px-4 py-2.5 rounded-xl bg-primary text-white font-medium text-sm hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background transition-colors self-end"
+          className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-white font-medium text-sm hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-primary transition-all self-end shadow-lg shadow-primary/20"
         >
           Send
         </button>
